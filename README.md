@@ -43,6 +43,9 @@ Given the initial configuration "Network_initial.pkt" you want to configure the 
 6. From the INTERNO zone you want to monitor the availability of any host connected to the network CLIENTI via the Ping tool. From the Internet and the OSPITI network, for security reasons, it is not possible to check the operation of a host via Ping.
 
 # Results
+The project was carried out by defining and configuring the network using the tool "Cisco Packet Tracer"
+
+![Network Schema](https://github.com/ClaudioFio/Secure-System-Configuration_Device-hardening-and-firewall-management/blob/main/Network_schema_CiscoPacketTracer.jpg)
 
 It is possible to view the network configured according to the previous specifications in the "Network_solution.pkt" file.
 The steps to be taken to configure the network are shown in the file "Step-by-Step_Solution.txt"
