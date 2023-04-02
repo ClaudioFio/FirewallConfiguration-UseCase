@@ -1,0 +1,357 @@
+conf t
+license boot module c1900 technology-package securityk9
+yes
+exit
+wr mem
+reload
+
+conf t
+zone security INTERNO
+exit
+zone security ESTERNO
+exit
+zone security OSPITI
+exit
+zone security CLIENTI
+exit
+
+interface Serial 0/1/0
+zone-member security OSPITI
+exit
+
+interface Serial 0/0/0
+zone-member security ESTERNO
+exit
+
+interface gigabitEthernet 0/1
+zone-member security INTERNO
+exit
+
+interface Serial 0/1/1
+zone-member security CLIENTI
+exit
+
+
+1)	(R-OSPITI)
+conf t
+aaa new-model
+username admin secret admin
+aaa authentication login default group radius local
+aaa authentication enable default group radius local
+radius server RAD
+address ipv4 146.48.58.230
+key radiusO
+exit
+line vty 0 4
+login authentication default
+transport input ssh
+exit
+ip domain-name OSPITI.com
+crypto key generate rsa -> 1024
+ip ssh version 2
+--- (PC-> R-OSPITI) ------------------------------------(DA FARE SU FW-WAN)
+ip access-list extended AL-FROM-INTERNO-SSH-OSPITI
+permit tcp host 146.48.96.15 host 10.38.0.2 eq 22
+exit
+
+class-map type inspect match-all CM-FROM-INTERNO-SSH-OSPITI
+match access-group name AL-FROM-INTERNO-SSH-OSPITI
+match protocol ssh
+exit
+
+policy-map type inspect PM-FROM-INTERNO-OSPITI
+class type inspect CM-FROM-INTERNO-SSH-OSPITI
+inspect
+exit
+exit
+
+zone-pair security ZP-INTERNO-TO-OSPITI source INTERNO destination OSPITI
+service-policy type inspect PM-FROM-INTERNO-OSPITI
+exit
+
+--- (R-OSPITI->RADIUS)
+ip access-list extended AL-FROM-OSPITI-RAD
+permit udp host 10.38.0.2 host 146.48.58.230 eq 1645
+exit
+
+class-map type inspect match-all CM-FROM-OSPITI-RAD
+match access-group name AL-FROM-OSPITI-RAD
+match any
+exit
+
+policy-map type inspect PM-FROM-OSPITI-INTERNO
+class type inspect CM-FROM-OSPITI-RAD
+inspect
+exit
+exit
+
+zone-pair security ZP-OSPITI-TO-INTERNO source OSPITI destination INTERNO
+service-policy type inspect PM-FROM-OSPITI-INTERNO
+exit
+
+	(R-CLIENTI)
+conf t
+aaa new-model
+username admin secret admin
+aaa authentication login default group radius local
+aaa authentication enable default group radius local
+radius server RAD
+address ipv4 146.48.58.230
+key radiusC
+exit
+line vty 0 4
+login authentication default
+transport input ssh
+exit
+ip domain-name CLIENTI.com
+crypto key generate rsa -> 1024
+ip ssh version 2
+
+--- (PC-> R-CLIENTI) ------------------------------------(DA FARE SU FW-WAN)
+ip access-list extended AL-FROM-INTERNO-SSH-CLIENTI
+permit tcp host 146.48.96.15 host 10.127.0.2 eq 22
+exit
+
+class-map type inspect match-all CM-FROM-INTERNO-SSH-CLIENTI
+match access-group name AL-FROM-INTERNO-SSH-CLIENTI
+match protocol ssh
+exit
+
+policy-map type inspect PM-FROM-INTERNO-CLIENTI
+class type inspect CM-FROM-INTERNO-SSH-CLIENTI
+inspect
+exit
+exit
+
+zone-pair security ZP-INTERNO-TO-CLIENTI source INTERNO destination CLIENTI
+service-policy type inspect PM-FROM-INTERNO-CLIENTI
+exit
+
+--- (R-CLIENTI->RADIUS)
+ip access-list extended AL-FROM-CLIENTI-RAD
+permit udp host 10.127.0.2 host 146.48.58.230 eq 1645
+exit
+
+class-map type inspect match-all CM-FROM-CLIENTI-RAD
+match access-group name AL-FROM-CLIENTI-RAD
+match any
+exit
+
+policy-map type inspect PM-FROM-CLIENTI-INTERNO
+class type inspect CM-FROM-CLIENTI-RAD
+inspect
+exit
+exit
+
+zone-pair security ZP-CLIENTI-TO-INTERNO source CLIENTI destination INTERNO
+service-policy type inspect PM-FROM-CLIENTI-INTERNO
+exit		
+
+-----------------------------
+-----------------------------
+
+
+2)
+ip access-list extended AL-FROM-INTERNO
+permit ip 146.48.58.0 0.0.0.255 any
+permit ip 146.48.96.0 0.0.0.255 any
+exit
+
+class-map type inspect match-all CM-FROM-INTERNO-ANY
+match access-group name AL-FROM-INTERNO
+match any
+exit
+
+policy-map type inspect PM-FROM-INTERNO-ESTERNO
+class type inspect CM-FROM-INTERNO-ANY
+inspect
+exit
+exit
+
+zone-pair security ZP-INTERNO-TO-ESTERNO source INTERNO destination ESTERNO
+service-policy type inspect PM-FROM-INTERNO-ESTERNO
+exit
+
+3)
+ip access-list extended AL-WWW-INTERNO
+permit tcp any host 146.48.58.20 eq www
+permit tcp any host 146.48.58.20 eq 443
+permit tcp any host 146.48.58.28 eq www
+permit tcp any host 146.48.58.28 eq 443
+exit
+
+class-map type inspect match-all CM-FROM-ESTERNO-INTERNO-HTTP
+match access-group name AL-WWW-INTERNO
+match protocol http
+exit
+
+class-map type inspect match-all CM-FROM-ESTERNO-INTERNO-HTTPS
+match access-group name AL-WWW-INTERNO
+match protocol https
+exit
+
+policy-map type inspect PM-FROM-ESTERNO-INTERNO
+class type inspect CM-FROM-ESTERNO-INTERNO-HTTP
+inspect
+exit
+class type inspect CM-FROM-ESTERNO-INTERNO-HTTPS
+inspect
+exit
+exit
+
+zone-pair security ZP-ESTERNO-TO-INTERNO source ESTERNO destination INTERNO
+service-policy type inspect PM-FROM-ESTERNO-INTERNO
+exit
+------
+
+ip access-list extended AL-WWW-CLIENTI
+permit tcp any 146.48.127.0 0.0.0.255 eq www
+permit tcp any 146.48.127.0 0.0.0.255 eq 443
+exit
+
+class-map type inspect match-all CM-FROM-ESTERNO-CLIENTI-HTTP
+match access-group name AL-WWW-CLIENTI
+match protocol http
+exit
+
+class-map type inspect match-all CM-FROM-ESTERNO-CLIENTI-HTTPS
+match access-group name AL-WWW-CLIENTI
+match protocol https
+exit
+
+policy-map type inspect PM-FROM-ESTERNO-CLIENTI
+class type inspect CM-FROM-ESTERNO-CLIENTI-HTTP
+inspect
+exit
+class type inspect CM-FROM-ESTERNO-CLIENTI-HTTPS
+inspect
+exit
+exit
+
+zone-pair security ZP-FROM-ESTERNO-CLIENTI source ESTERNO destination CLIENTI
+service-policy type inspect PM-FROM-ESTERNO-CLIENTI
+exit
+
+4) 
+ip access-list extended AL-WWW-OSPITI-ESTERNO
+permit tcp any any eq www
+permit tcp any any eq 443
+exit
+
+class-map type inspect match-all CM-FROM-OSPITI-ESTERNO-HTTP
+match access-group name AL-WWW-OSPITI
+match protocol http
+exit
+
+class-map type inspect match-all CM-FROM-OSPITI-ESTERNO-HTTPS
+match access-group name AL-WWW-OSPITI-ESTERNO
+match protocol https
+exit
+
+policy-map type inspect PM-FROM-OSPITI-ESTERNO
+class type inspect CM-FROM-OSPITI-ESTERNO-HTTP
+inspect
+exit
+class type inspect CM-FROM-OSPITI-ESTERNO-HTTPS
+inspect
+exit
+
+zone-pair security ZP-OSPITI-TO-ESTERNO source OSPITI destination ESTERNO
+service-policy type inspect PM-FROM-OSPITI-ESTERNO
+exit
+----------------------
+
+ip access-list extended AL-WWW-OSPITI-CLIENTI
+permit tcp any host 146.48.127.80 eq www
+permit tcp any host 146.48.127.80 eq 443
+exit
+
+class-map type inspect match-all CM-FROM-OSPITI-CLIENTI-HTTP
+match access-group name AL-WWW-OSPITI
+match protocol http
+exit
+
+class-map type inspect match-all CM-FROM-OSPITI-CLIENTI-HTTPS
+match access-group name AL-WWW-OSPITI-CLIENTI
+match protocol https
+exit
+
+policy-map type inspect PM-FROM-OSPITI-CLIENTI
+class type inspect CM-FROM-OSPITI-CLIENTI-HTTP
+inspect
+exit
+class type inspect CM-FROM-OSPITI-CLIENTI-HTTPS
+inspect
+exit
+exit
+
+zone-pair security ZP-OSPITI-TO-CLIENTI source OSPITI destination CLIENTI
+service-policy type inspect PM-FROM-OSPITI-CLIENTI
+exit
+
+----------------------------------------------------------------------
+ip access-list extended AL-WWW-OSPITI-INTERNO
+permit tcp any host 146.48.58.20 eq www
+permit tcp any host 146.48.58.20 eq 443
+permit tcp any host 146.48.58.28 eq www
+permit tcp any host 146.48.58.28 eq 443
+exit
+
+class-map type inspect match-all CM-FROM-OSPITI-INTERNO-HTTP
+match access-group name AL-WWW-OSPITI-INTERNO
+match protocol http
+exit
+
+class-map type inspect match-all CM-FROM-OSPITI-INTERNO-HTTPS
+match access-group name AL-WWW-OSPITI-INTERNO
+match protocol https
+exit
+
+policy-map type inspect PM-FROM-OSPITI-INTERNO
+class type inspect CM-FROM-OSPITI-INTERNO-HTTP
+inspect
+exit
+class type inspect CM-FROM-OSPITI-INTERNO-HTTPS
+inspect
+exit
+exit
+
+zone-pair security ZP-OSPITI-TO-INTERNO source OSPITI destination INTERNO
+service-policy type inspect PM-FROM-OSPITI-INTERNO
+exit
+
+5)
+ip access-list extended AL-FROM-INTERNO-CLIENTI-FTP
+permit tcp 148.48.96.0 0.0.0.255 host 146.48.127.80 eq ftp
+exit
+
+class-map type inspect match-all CM-FROM-INTERNO-CLIENTI-FTP
+match access-group name AL-FROM-INTERNO-CLIENTI-FTP
+match protocol ftp
+exit
+
+policy-map type inspect PM-FROM-INTERNO-CLIENTI
+class type inspect CM-FROM-INTERNO-CLIENTI-FTP
+inspect
+exit
+exit
+
+zone-pair security ZP-INTERNO-TO-CLIENTI source INTERNO destination CLIENTI
+service-policy type inspect PM-FROM-INTERNO-CLIENTI
+exit
+
+6)
+ip access-list extended AL-FROM-INTERNO-CLIENTI-PING
+permit ip any 146.48.127.0 0.0.0.255
+exit
+
+class-map type inspect match-any CM-FROM-INTERNO-CLIENTI-PING
+match access-group name AL-FROM-INTERNO-CLIENTI-PING
+match protocol icmp
+exit
+
+policy-map type inspect PM-FROM-INTERNO-CLIENTI
+class type inspect CM-FROM-INTERNO-CLIENTI-PING
+inspect
+exit 
+exit
