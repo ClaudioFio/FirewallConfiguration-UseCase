@@ -1,0 +1,10 @@
+R-CLIENTI
+Username: admin
+Password: admin
+radius key: radiusC
+
+
+R-OSPITI
+Username: admin
+Password: admin
+radius key: radiusO
